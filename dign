@@ -1,0 +1,3 @@
+#!/bin/bash
+
+for i in $(seq 1 64); do echo dig$i ` ssh dig$i -f "top -b -n 1 | grep ' R ' | grep -v ' top '|wc -l" `; done

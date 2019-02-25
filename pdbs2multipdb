@@ -1,0 +1,28 @@
+#!/bin/bash
+#Michelle McCully
+#3-28-08
+#Takes a list of pdbs and makes a model-delimited pdb file
+
+
+if [ $# -ne 1 ]; then
+	script=`echo $0 | awk -F / '{print $NF}'`
+	echo "Usage: $script <output pdb file>"
+	exit
+fi
+
+out="$1"
+if [ -e $out ]; then 
+	read -p "$out already exists.  Press Enter to continue or Ctrl+C to abort."
+	rm $out
+fi
+shift
+
+i=1
+for file in `ls mov.*.pdb | sort -t '.' -n +2`; do
+	printf "MODEL%9i\n" $i >> $out
+	awk '{if($1=="ATOM" || $1=="TER"){print $0}}' $file >> $out
+	echo "ENDMDL" >> $out
+	let "i = i + 1"
+done
+
+

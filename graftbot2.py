@@ -1,0 +1,137 @@
+#!/usr/bin/python
+
+import sys
+import os
+import re
+
+#let's hope they have gzip in their PATH env variable
+def unzip_pdbs( pdblist ):
+	for ilist in range( len( pdblist ) ):
+		pdbname = pdblist[ ilist ].strip()
+		if pdbname.strip().split( '.' )[ -1 ] == 'gz':
+			if os.path.exists( pdbname ):
+				os.system( 'gzip -d ' + pdbname )
+				pdbname = pdbname.replace( '.gz', '' )
+			else:
+				pdbname = pdbname.replace( '.gz', '' )
+				if not os.path.exists( pdbname ):
+					print 'ERROR: could find pdb', pdbname, 'or', pdbname + '.gz'
+					sys.exit()
+		pdblist[ ilist ] = pdbname
+	return
+
+#add proper chain data to all pdbs in list
+def add_pdb_chains( pdblist ):
+	for ilist in range( len( pdblist ) ):
+		pdbname = pdblist[ ilist ].strip()
+		if not pdbname.count( 'addchain' ):
+			os.system( '/work/chrisk/bin/reorder_pdb_chains.py ' + pdbname )
+			pdbname = pdbname.strip().replace( '.pdb', '.addchain.pdb' )
+		pdblist[ ilist ] = pdbname
+	return
+
+def get_pdb_graft_insert_ranges( pdblist, logpath ):
+	ranges = []
+	for pdbname in pdblist:
+		#parse pdbname into multigraft output name
+#		logname = pdbname.replace( 'refine_with_Ab_after_design.addchain.pdb', 'multigraft.log' )
+		logname = re.sub( 'refine_with_Ab_after_design.*', 'multigraft.log', pdbname )
+		if logpath: logname = logpath + '/' + ( logname.split( '/' )[ -1 ] )
+		if not os.path.exists( logname ):
+			print 'ERROR: could find log file', logname
+			sys.exit()
+		log = open( logname, 'r' ).readlines()
+		line = log[ 2 ].strip().split()
+		nterm = int( line[ 2 ] )
+		cterm = int( line[ 3 ] )
+		ranges.append( ( nterm, cterm ) )
+	return ranges
+
+#this part is pretty fragile, must conform to naming convention
+def get_fastalist( pdblist, fastapath ):
+	fastalist = []
+	for pdbname in pdblist:
+		if pdbname.count( '/' ) > 0: pdbname = pdbname.split( '/' )[ -1 ]
+		fastaname = re.sub( 'm\d+\.c\d+\.d\d+\.refine_with_Ab_after_design.*', 'fasta', pdbname )
+		fastaname = fastapath + fastaname
+		if not os.path.exists( fastaname ):
+			print 'ERROR: could find fasta file', fastaname
+			sys.exit()
+		fastalist.append( fastaname )
+	return fastalist
+
+# need to know pdblist, fastapath, rscripts xml
+# TODO: assumig design chain is last, count chains and use last one (??)
+sys.argv.pop( 0 )
+try:
+	pdblistname = sys.argv.pop( 0 )
+	argsname = sys.argv.pop( 0 )
+	xmlname = sys.argv.pop( 0 )
+except:
+	print "args:\tpdblist\trosetta_args_filename\trosetta_xml_filename\t<path_to_fastas_dir(False)>\t<graft_res_pos>\t<graft_res_chain(A)>\t<path_to_multigraft_logs(False)>"
+	print 'Notes:'
+	print '\t- fasta filenames in fasta dir must have the same prefix (before the stuff added by multigraft) as the pdbs in pdblist'
+	print '\t- if using no_design_graft_res_pos option, residue indexing starts at 1 (e.g. if no design residues 1, 3, and 5 of graft, use "1,3,5" for option'
+	print '\t- if using no_design_graft_res_pos option, must have "%%graft_res%%" variable in your xml file!'
+	sys.exit()
+try:
+	fastapath = sys.argv.pop( 0 )
+	if fastapath == 'false' or fastapath == 'False' or fastapath == 'F' or fastapath == 'f' or fastapath == 'FALSE':
+		fastapath = False
+	else: fastapath += '/'
+except:
+	fastapath = False
+try:
+	graft_res_pos = sys.argv.pop( 0 )
+	if graft_res_pos == 'false' or graft_res_pos == 'False' or graft_res_pos == 'F' or graft_res_pos == 'f' or graft_res_pos == 'FALSE':
+		graft_res_pos = False
+except:
+	graft_res_pos = False
+if graft_res_pos: graft_res_pos = graft_res_pos.split( ',' )
+try:
+	graft_chain = sys.argv.pop( 0 )
+except:
+	graft_chain = 'A'
+try:
+	logpath = sys.argv.pop( 0 )
+	if logpath == 'false' or logpath == 'False' or logpath == 'F' or logpath == 'f' or logpath == 'FALSE':
+		logpath = False
+	else: logpath += '/'
+except:
+	logpath = False
+
+#TODO: make path an option or depend on PATH ENV
+rosettapath = '/work/chrisk/Rosetta/main/source/bin/rosetta_scripts.static.linuxgccrelease'
+if pdblistname.split( '.' )[ -1 ] == 'pdb':
+	pdblist = [ pdblistname ]
+else:
+	pdblist = open( pdblistname, 'r' ).readlines()
+unzip_pdbs( pdblist )
+add_pdb_chains( pdblist )
+ranges = get_pdb_graft_insert_ranges( pdblist, logpath )
+
+if fastapath:
+	fastalist = get_fastalist( pdblist, fastapath )
+for iname in range( len( pdblist ) ):
+	pdbname = pdblist[ iname ]
+	range = ranges[ iname ]
+	outname = pdbname.replace( '.pdb', '.rscripts.out' )
+	cmd = rosettapath + ' -s ' + pdbname + ' @' + argsname + ' -parser:protocol ' + xmlname
+	if fastapath:
+		fastaname = fastalist[ iname ]
+		cmd += ' -in:file:fasta ' + fastaname 
+	#add graft-specific info?
+	if graft_res_pos:
+		graft_res = []
+		graft_res_nterm = range[ 0 ]
+		#fill graft_res with res,chain indices (strings)
+		for res_pos in graft_res_pos:
+			graft_res.append( str( graft_res_nterm + int( res_pos ) - 1 ) + graft_chain )
+		#default parser script vars
+		cmd += ' -parser:script_vars graft_res=' + ','.join( graft_res )
+		for res_pos, res in zip( graft_res_pos, graft_res ):
+			cmd += ' graft_res_' + res_pos + '=' + res
+	cmd += ' >& ' + outname
+	print 'Running:\n', cmd
+	os.system( cmd )
+

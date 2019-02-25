@@ -1,0 +1,2 @@
+#!/bin/bash
+/Applications/MacPyMOL.app/Contents/MacOS/MacPyMOL $@ -d 'show ribbon; hide lines, elem H; util.cbc; util.cnc; set ribbon_width, 10; show sticks, resn cys and not elem H; run /Users/indigo/bin/pymol_sel_all_muts.py' 

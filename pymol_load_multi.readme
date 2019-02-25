@@ -1,0 +1,2 @@
+import glob
+for i,x in enumerate( glob.glob("*.pdb") ): cmd.load(x, x) 

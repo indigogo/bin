@@ -1,0 +1,29 @@
+/work/dadriano/DEVEL/boincFFF/BASH 
+
+Don't go crazy, please try it first with a small job. I'll recommend not less than 50 structures (and not more than 1K for starters). The maximum number of structures admitted in one job is 10K. The input is a list of with absolute paths to the input PDBs (only single chain structures).
+
+
+HowTo:
+
+#Steps:
+##0. Create a new directory to run the job and cd into it (one NEW directory per each job).
+###> #example: mkdir $HOME/boincFFF; cd $HOME/boincFF
+
+##1 .Generate a list of nodes to run the job, 2 is fine for ~100s jobs, maybe 4 for ~1Ks, etc. Maximum size of a job is 10K
+###> freedigs | grep dig | grep -v "UNRESPONSIVE" | grep -v "dig1:" | head -n 2| awk '{print $1}' | sed 's/://g' > pnodes.txt
+
+##2.Then run the boinc job generator using a pdblist with absolute paths
+###> time /work/dadriano/DEVEL/boincFFF/BASH/generate_boinc_FFF_job.bash pdbs.list fooname yes
+
+##3.Then submitt the job
+###> time /work/dadriano/DEVEL/boincFFF/BASH/submit_boinc_FFF_job.bash  yesa
+
+##4.After some time (~1 day-1week), analyze the results using:
+###> time /work/dadriano/DEVEL/boincFFF/BASH/analyzeMyFFFdata.bash
+
+Best,
+Daniel
+
+**Alpha release means that it is likely to contain yet-undetected, possibly critical, bugs.
+
+**To anyone interested, I'll be happy of providing first-person explanations about the process happening behind the scenes .

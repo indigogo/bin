@@ -1,0 +1,137 @@
+#!/usr/bin/perl
+
+if( !$ARGV[ 0 ] ){ die "args:\tscorefile\tnterm\t<scoretype(binding)||total\t<kT(1)>\t<outtype(psfm)>\n"; }
+$filename = shift( @ARGV ); #||
+$nterm = shift( @ARGV );
+$scoretype_byres = shift( @ARGV );
+$kt = shift( @ARGV ) || 1;
+$outtype = shift( @ARGV );
+
+#load file, init restypes
+#if( $filename eq '-' ){ @file = <>; }
+@file = `cat $filename`;
+@restypes = ('A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y');
+
+#get scoretype cols
+$scoretype = "total";
+#$scoretype = shift( @ARGV ) || "total";
+$scoretype = $scoretype . "_score:";
+$totalcol = `ncol.pl $scoretype $filename`;
+$bindcol = `ncol.pl binding_score: $filename`;
+chomp( $totalcol ); chomp( $bindcol );
+
+# line length, seq col, seq length
+@test_parse = split ' ', $file[ 0 ];
+$n_line = $#test_parse;
+if( $n_line > 1 ){ $seqcol = 1; }
+else{ $seqcol = 0; }
+@test_seq = split '', $test_parse[ $seqcol ];
+$n_seq = $#test_seq;
+
+#init seq matrix, total_score array, pep_score array
+$seqmat[ 0 ][ 0 ] = 'X';
+foreach $lineno( 0..$#file ){
+	@parse = split ' ', $file[ $lineno ];
+	#parse sequence load into seqmat
+	@seq = split '', $parse[ $seqcol ];
+	foreach $seqpos( 0..$#seq ){
+		$seqmat[ $lineno ][ $seqpos ] = $seq[ $seqpos ];
+	}
+
+	#get scores, cols indexed from 1 in ncol.pl!
+	$totalmat[ $lineno ] = $parse[ $totalcol - 1 ];
+	$pepmat[ $lineno ] = $parse[ $pepcol - 1 ];
+}
+
+# init score matrix
+foreach $seqpos( 0..$n_seq ){
+	foreach $resi( 0..$#restypes ){
+		$scorematrix[$seqpos]{$restypes[$resi]} = 0;
+	}
+}
+
+#over all seqpos
+foreach $seqpos( 0..$n_seq ){
+	$pos = $seqpos + $nterm;
+	$z_prob = 0;
+
+	#over all res
+	foreach $resi( 0..$#restypes ){
+		#calc (boltz) avgs
+		$total = 0;
+		$pep = 0;
+		$z_total = 0;
+		$z_pep = 0;
+		$n_trial = 0;
+		foreach $lineno( 0..$#file ){
+			if( $seqmat[ $lineno ][ $seqpos ] ne $restypes[ $resi ] ){ next; }
+			$n_trial++;
+
+			#get scores, cols indexed from 1 in ncol.pl!
+			$total_this = $totalmat[ $lineno ];
+			$pep_this = $pepmat[ $lineno ];
+
+			$z_total += ( exp( -1 * $total_this / $kt ) );
+			$total += ( $total_this * exp( -1 * $total_this / $kt ) );
+			$z_pep += ( exp( -1 * $pep_this / $kt ) );
+			$pep += ( $pep_this * exp( -1 * $pep_this / $kt ) );
+		}#end line
+
+		#calc and store probabilities
+		if( $n_trial > 0 ){
+			$total = $total / $z_total;
+			$pep = $pep / $z_pep;
+			$byres_this = $total - $pep;
+			if( $scoretype_byres eq 'total' ){ $byres_this = $total }
+#			printf "$restypes[$resi]$pos\t%.3f\n", $byres_this;
+			$prob_this = ( exp( -1 * $byres_this / $kt ) );
+		}
+		else{
+			$prob_this = 0;
+		}
+
+		$z_prob += $prob_this;
+		$scorematrix[$seqpos]{$restypes[$resi]} = $prob_this;
+
+	}#end resi
+#	print "\n";
+
+	#normalize probabilities
+	foreach $resi( 0..$#restypes ){
+		$scorematrix[$seqpos]{$restypes[$resi]} = $scorematrix[$seqpos]{$restypes[$resi]} / $z_prob;
+	}
+
+	#write psfm line
+	if( $outtype ne 'show' ){
+		print "$pos\t";
+		foreach $resi( 0..$#restypes ){
+			print "$scorematrix[$seqpos]{$restypes[$resi]}\t";
+		}
+		print "\n";
+	}
+	
+}#end seqpos
+
+#write alphabetical matrix to std out?
+if( $outtype eq 'show' ){
+	foreach $seqpos(0..$#seq){
+		foreach $resi(0..$#restypes){
+			$tmphash{$restypes[$resi]}=$scorematrix[$seqpos]{$restypes[$resi]};
+		}
+
+		@sorted = sort { $tmphash{$a} <=> $tmphash{$b} } keys %tmphash;
+
+		foreach $resi(0..$#restypes){
+			$seqmatrix[$seqpos][$resi] = $sorted[$resi];
+		}
+	}
+
+	foreach $resi(0..$#restypes){
+		foreach $seqpos(0..$#seq){
+			print"$seqmatrix[$seqpos][$resi]\t";
+		}
+		print"\n";
+	}
+}
+
+
