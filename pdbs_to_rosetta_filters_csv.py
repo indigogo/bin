@@ -24,17 +24,26 @@ if __name__ == '__main__':
 	# keys are column names, each key holds a list of col values
 	d = {}
 
+	pdbnames = []
 	for pdbname in pdblist:
 		pdbname = pdbname.rstrip()
 		pdb = open( pdbname, 'r' ).readlines()
 		
 		#add pdbname to dict
-		pdb4 = ( pdbname.split( '/' )[ -1 ] ).split( '.' )[ -1 ]
-		# init the pdb column if we havent seen it
-		if not 'pdb' in d.keys():
-			d[ 'pdb' ] = []
+		#below gives you filename without path or extension
+		pdbname = '.'.join( ( pdbname.split( '/' )[ -1 ] ).split( '.' )[ :-1 ] )
+		# this list used for row names
+		pdbnames.append( pdbname )
+
+		# assumes first 4 letters of fname is PDBID!
+		pdb4 = pdbname[ :4 ]
+
+		# init the pdb4 id column if we havent seen it
+		if not 'pdb4' in d.keys():
+			d[ 'pdb4' ] = []
 		# and add to the column
-		d[ 'pdb' ].append( pdb4 )
+		d[ 'pdb4' ].append( pdb4 )
+
 
 		start_reading = False
 		for line in pdb:
@@ -55,7 +64,8 @@ if __name__ == '__main__':
 				d[ scoreterm ].append( scoreval )
 
 	# create data frame from dict
-	df = pd.DataFrame( data=d )
+	df = pd.DataFrame( data=d, index=pdbnames )
+	df.index.name = 'file'
 	# write to csv
 	df.to_csv( 'rs_pdb_filter_vals.csv', header='rosetta scripts output pdb filter values' )
 
