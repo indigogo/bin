@@ -36,7 +36,7 @@ if __name__ == '__main__':
 		pdbnames.append( pdbname )
 
 		# assumes first 4 letters of fname is PDBID!
-		pdb4 = pdbname[ :4 ]
+		pdb4 = re.split( '\W+', pdbname )[ 0 ][ :4 ]
 
 		# init the pdb4 id column if we havent seen it
 		if not 'pdb4' in d.keys():
